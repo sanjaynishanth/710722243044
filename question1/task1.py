@@ -1,58 +1,65 @@
 from fastapi import FastAPI, HTTPException
 import requests
+from typing import List, Dict, Union
 
 app = FastAPI()
-# api p-prime,f-fibonacci,e-even,r-random number
+
+
+JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzQyNDU0NjY4LCJpYXQiOjE3NDI0NTQzNjgsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6IjNkN2E0ZDQyLTA0NTctNDIyYi05NWMwLWU3NjZiOWRhOGJhYSIsInN1YiI6IjIyYWQwNDRAZHJuZ3BpdC5hYy5pbiJ9LCJjb21wYW55TmFtZSI6IkRyLk4uRy5QIEluc3RpdHV0ZSBvZiBUZWNobm9sb2d5IiwiY2xpZW50SUQiOiIzZDdhNGQ0Mi0wNDU3LTQyMmItOTVjMC1lNzY2YjlkYThiYWEiLCJjbGllbnRTZWNyZXQiOiJGQWpmYlhMYkhLRHRma3l0Iiwib3duZXJOYW1lIjoiU2FuamF5IFMiLCJvd25lckVtYWlsIjoiMjJhZDA0NEBkcm5ncGl0LmFjLmluIiwicm9sbE5vIjoiNzEwNzIyMjQzMDQ0In0.vcjCK5mcoN4A7uJRARe7eSfiwALfjPmxTbMXnNFn-1M"  # Replace with your actual token if it changes
+
 server_url = {
     "p": "http://20.244.56.144/test/primes",
     "f": "http://20.244.56.144/test/fibo",
     "e": "http://20.244.56.144/test/even",
     "r": "http://20.244.56.144/test/rand"
 }
-#initial window size
+
 window_size = 10
-window = []
+window: List[Union[int, float]] = []
+
 
 @app.get("/calculate")
 def calculate_avg(source: str):
     if source not in server_url:
-        raise HTTPException(status_code=400, detail="Invalid")
+        raise HTTPException(status_code=400, detail="Invalid source")
+
+    headers = {
+        "Authorization": f"Bearer {JWT_TOKEN}"  # Add the JWT to the headers
+    }
 
     try:
-        response = requests.get(server_url[source], timeout=0.5)
+        response = requests.get(server_url[source], headers=headers, timeout=0.5)  # Include headers in the request
         response.raise_for_status()
-    except requests.exceptions.RequestException:
-        raise HTTPException(status_code=502, detail="Error fetching data")
-    #if input data is in list take as list
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Error fetching data: {e}")
+
     try:
         data = response.json()
-        if isinstance(data,list):
-            num=list(set(data))
+        if isinstance(data, list):
+            num = list(set(data))
+        elif isinstance(data, dict) and "numbers" in data:
+            num = list(set(data["numbers"]))
         else:
-            num=list(set(data.get("numbers",[])))
-        
-    except (ValueError, AttributeError):
-        raise HTTPException(status_code=400, detail="Invalid data received")
+            raise ValueError("Invalid data format")
 
-    # Filter valid numbers
+    except (ValueError, AttributeError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid data received: {e}")
 
-    fnum=[]
+    fnum: List[Union[int, float]] = []
     for n in num:
-        if isinstance(n,(int,float)) and n>=0:
+        if isinstance(n, (int, float)) and n >= 0:
             fnum.append(n)
 
-    num=fnum
-    
+    num = fnum
 
     if not num:
         raise HTTPException(status_code=400, detail="No valid numbers")
 
-    # Maintain the sliding window
     global window
     window.extend(num)
-    window = list(set(window))  
+    window = list(set(window))
     if len(window) > window_size:
-        window = window[-window_size:]  
+        window = window[-window_size:]
 
     avg = sum(window) / len(window)
 
